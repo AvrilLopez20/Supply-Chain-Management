@@ -1,0 +1,160 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-erp-text">Demand Forecasting</h1>
+      <p class="text-erp-textMuted mt-1">Analyze historical data to predict future inventory needs.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="addRecord" class="px-3 py-2 rounded-lg border border-erp-border text-sm">+ Add Record</button>
+      <button id="generateForecast" class="bg-erp-darkGreen text-white px-4 py-2 rounded-lg">Generate Forecast</button>
+    </div>
+  </div>
+
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-erp-border">
+    <div class="flex gap-6 items-center mb-4">
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-erp-textMuted">Filters:</label>
+        <select id="filterProduct" class="rounded-lg border border-erp-border px-3 py-2">
+          <option value="all">All Products</option>
+          @foreach ($productForecasts as $p)
+          <option value="{{ $p['sku'] }}">{{ $p['name'] }}</option>
+          @endforeach
+        </select>
+      </div>
+      <div>
+        <select id="filterYear" class="rounded-lg border border-erp-border px-3 py-2">
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+        </select>
+      </div>
+      <div>
+        <select id="filterRange" class="rounded-lg border border-erp-border px-3 py-2">
+          <option value="12m">Last 12 Months</option>
+          <option value="6m">Last 6 Months</option>
+          <option value="ytd">Year to Date</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-erp-bg p-4 rounded-lg">
+        <canvas id="demandChart" class="w-full h-60"></canvas>
+      </div>
+      <div class="bg-white p-4 rounded-lg border border-erp-border">
+        <h3 class="text-sm text-erp-textMuted">Forecast Summary</h3>
+        <div id="forecastSummary" class="mt-3 bg-erp-lightGreen/10 p-3 rounded">
+          <div class="text-lg font-bold text-erp-darkGreen">Predicted Demand (Next 30 Days)</div>
+          <div id="predDemand" class="text-2xl font-bold text-erp-darkGreen">12,450 units</div>
+          <div class="text-sm text-erp-textMuted mt-2">Key Drivers: Seasonal uptick expected in Q3</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-erp-border">
+    <h2 class="text-lg font-bold text-erp-text mb-4">Historical Sales Data</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead class="border-b border-erp-border">
+          <tr>
+            <th class="py-3 px-4 text-erp-text font-semibold">Order ID</th>
+            <th class="py-3 px-4 text-erp-text font-semibold">Product</th>
+            <th class="py-3 px-4 text-erp-text font-semibold">Category</th>
+            <th class="py-3 px-4 text-erp-text font-semibold">Date</th>
+            <th class="py-3 px-4 text-erp-text font-semibold">Quantity</th>
+            <th class="py-3 px-4 text-erp-text font-semibold">Revenue</th>
+            <th class="py-3 px-4 text-erp-text font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="historicalTable">
+          @foreach ($historicalSales as $row)
+          <tr data-sku="{{ $row['sku'] }}" class="border-b border-erp-border hover:bg-erp-bg transition">
+            <td class="py-3 px-4">{{ $row['order'] }}</td>
+            <td class="py-3 px-4">{{ $row['product'] }}</td>
+            <td class="py-3 px-4"><span class="text-xs rounded-full bg-erp-bg px-2 py-1">{{ $row['category'] }}</span></td>
+            <td class="py-3 px-4">{{ $row['date'] }}</td>
+            <td class="py-3 px-4">{{ number_format($row['qty']) }}</td>
+            <td class="py-3 px-4">${{ number_format($row['revenue']) }}</td>
+            <td class="py-3 px-4"><a href="#" class="text-erp-darkGreen">View</a></td>
+          </tr>
+          @endforeach
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-erp-border">
+    <h3 class="text-lg font-bold text-erp-text mb-2">Model Accuracy</h3>
+    <div class="space-y-3">
+      @foreach ($modelAccuracy as $model)
+      <div class="flex items-center justify-between p-3 bg-erp-bg rounded-lg">
+        <span class="text-erp-text font-medium">{{ $model['model'] }}</span>
+        <div class="flex gap-6">
+          <span class="text-erp-text"><strong>Accuracy:</strong> {{ $model['accuracy'] }}</span>
+          <span class="text-erp-text"><strong>MAPE:</strong> {{ $model['mape'] }}</span>
+        </div>
+      </div>
+      @endforeach
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const months = @json(array_column($demandData, 'month'));
+  const demandActual = @json(array_column($demandData, 'actual'));
+  const demandForecast = @json(array_column($demandData, 'forecast'));
+  const productMonthly = @json($productMonthly);
+
+  const ctx = document.getElementById('demandChart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'Actual', data: demandActual, borderColor: '#10b981', backgroundColor: '#10b98122', tension: 0.4, fill: true },
+        { label: 'Forecast', data: demandForecast, borderColor: '#3b82f6', backgroundColor: '#3b82f622', tension: 0.4, fill: true }
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  const filterProduct = document.getElementById('filterProduct');
+  const historicalRows = Array.from(document.querySelectorAll('#historicalTable tr'));
+  const predDemandEl = document.getElementById('predDemand');
+
+  const updateForProduct = (sku) => {
+    if (sku === 'all') {
+      chart.data.datasets[0].data = demandActual;
+      chart.data.datasets[1].data = demandForecast;
+      predDemandEl.textContent = '12,450 units';
+      historicalRows.forEach(r => r.style.display = '');
+    } else if (productMonthly[sku]) {
+      chart.data.datasets[0].data = productMonthly[sku];
+      chart.data.datasets[1].data = productMonthly[sku].map(v => Math.round(v * 1.08));
+      const total = chart.data.datasets[1].data.reduce((a,b)=>a+b,0);
+      predDemandEl.textContent = total.toLocaleString() + ' units';
+      historicalRows.forEach(r => {
+        r.style.display = (r.dataset.sku === sku) ? '' : 'none';
+      });
+    }
+    chart.update();
+  };
+
+  filterProduct.addEventListener('change', function () { updateForProduct(this.value); });
+
+  document.getElementById('filterRange').addEventListener('change', function () {
+    // For demo: range only affects chart zoom/resolution in future
+    // No-op for now
+  });
+});
+</script>
+
+@endsection
+

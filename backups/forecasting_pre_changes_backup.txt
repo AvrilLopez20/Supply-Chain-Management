@@ -1,0 +1,7 @@
+Backup note: previous PowerShell copy attempts may have failed due to shell '&&' parsing issues.
+This backup file is created to mark that we are about to modify forecasting code.
+Manual rollback instructions:
+- Replace resources/views/forecasting/index.blade.php with backups/index.blade.php.bak if present.
+- Replace resources/views/forecasting/analytics.blade.php with backups/analytics.blade.php.bak if present.
+- Replace app/Http/Controllers/ForecastingController.php with backups/ForecastingController.php.bak if present.
+If those .bak files are missing, create new backups again before edits.

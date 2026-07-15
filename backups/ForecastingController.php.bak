@@ -1,0 +1,99 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\View\View;
+use App\Models\Product;
+use App\Models\HistoricalSale;
+
+class ForecastingController extends Controller
+{
+    /**
+     * Display forecasting overview
+     */
+    public function index(): View
+    {
+        $demandData = [
+            ['month' => 'Jan', 'actual' => 12500, 'forecast' => 13200],
+            ['month' => 'Feb', 'actual' => 11800, 'forecast' => 12100],
+            ['month' => 'Mar', 'actual' => 14200, 'forecast' => 13800],
+            ['month' => 'Apr', 'actual' => 15100, 'forecast' => 14900],
+            ['month' => 'May', 'actual' => 16400, 'forecast' => 16200],
+            ['month' => 'Jun', 'actual' => 17800, 'forecast' => 17500],
+        ];
+
+        $products = Product::all();
+        $productForecasts = [];
+        foreach ($products as $prod) {
+            $q3 = rand(4000, 13000);
+            $q4 = intval($q3 * 1.12);
+            $productForecasts[] = [
+                'sku' => $prod->sku,
+                'name' => $prod->name,
+                'q3' => $q3,
+                'q4' => $q4,
+                'trend' => rand(0, 1) ? 'Up' : 'Down'
+            ];
+        }
+
+        $historicalSales = HistoricalSale::all()->map(function($sale) {
+            return [
+                'order' => $sale->order_id,
+                'product' => $sale->product_name,
+                'sku' => $sale->sku,
+                'category' => $sale->category,
+                'date' => $sale->date,
+                'qty' => $sale->qty,
+                'revenue' => floatval($sale->revenue),
+            ];
+        })->toArray();
+
+        // Per-product monthly series (Jan-Jun) for interactive chart filtering
+        $productMonthly = [
+            'IWA-1001' => [1200, 1100, 1400, 1500, 1600, 1700],
+            'CBV-3200' => [900, 850, 1200, 1300, 1450, 1600],
+            'STB-0088' => [3000, 2800, 3500, 3600, 3800, 4000],
+            'ALS-4420' => [600, 700, 800, 900, 950, 1000],
+        ];
+
+        foreach ($products as $prod) {
+            if (!isset($productMonthly[$prod->sku])) {
+                $productMonthly[$prod->sku] = [rand(400, 900), rand(400, 900), rand(400, 900), rand(400, 900), rand(400, 900), rand(400, 900)];
+            }
+        }
+
+        $modelAccuracy = [
+            ['model' => 'ARIMA',           'accuracy' => '87.5%', 'mape' => '8.2%'],
+            ['model' => 'Linear Regression', 'accuracy' => '82.1%', 'mape' => '12.4%'],
+            ['model' => 'Moving Average',  'accuracy' => '79.3%', 'mape' => '15.1%'],
+        ];
+
+        return view('forecasting.index', [
+            'demandData' => $demandData,
+            'productForecasts' => $productForecasts,
+            'historicalSales' => $historicalSales,
+            'productMonthly' => $productMonthly,
+            'modelAccuracy' => $modelAccuracy,
+            'pageTitle' => 'Demand Forecasting',
+        ]);
+    }
+
+    /**
+     * Display analytics and insights
+     */
+    public function analytics(): View
+    {
+        $insights = [
+            'seasonal_patterns' => 'Peak demand observed during Q3-Q4',
+            'growth_rate' => '12.3% YoY growth trend',
+            'volatility' => 'Moderate volatility in electronics category',
+            'recommendations' => 'Increase procurement for Q4 by 15%',
+        ];
+
+        return view('forecasting.analytics', [
+            'insights' => $insights,
+            'pageTitle' => 'Forecasting Analytics',
+        ]);
+    }
+}
+
